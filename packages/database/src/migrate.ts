@@ -41,6 +41,7 @@ export async function runMigrations() {
       created_at TIMESTAMP NOT NULL DEFAULT NOW()
     );
     CREATE INDEX IF NOT EXISTS shifts_date_idx ON shifts(open_date, status);
+    ALTER TABLE shifts ADD COLUMN IF NOT EXISTS shift_for VARCHAR(20) NOT NULL DEFAULT 'BOTH';
 
     CREATE TABLE IF NOT EXISTS shift_role_config (
       id SERIAL PRIMARY KEY,
