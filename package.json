@@ -1,0 +1,23 @@
+{
+  "name": "punjab-king-backend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "PB Exchange backend (apps/api) — split from the main monorepo for standalone backend development.",
+  "workspaces": [
+    "apps/api",
+    "packages/database",
+    "packages/types",
+    "packages/validation"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=apps/api",
+    "build": "npm run build --workspace=packages/types && npm run build --workspace=packages/validation && npm run build --workspace=packages/database && npm run build --workspace=apps/api",
+    "start": "npm run start --workspace=apps/api",
+    "db:generate": "npm run db:generate --workspace=packages/database",
+    "db:migrate": "npm run db:migrate --workspace=packages/database",
+    "db:seed": "npm run db:seed --workspace=packages/database"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  }
+}
