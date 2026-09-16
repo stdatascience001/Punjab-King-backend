@@ -63,6 +63,7 @@ export class DashboardService {
       total_amount: string;
       total_count: number;
       total_entries: number;
+      total_payout: string;
     }>>`
       SELECT
         t.shift_id,
@@ -73,19 +74,26 @@ export class DashboardService {
           FROM transaction_entries te
           JOIN transactions t2 ON te.transaction_id = t2.id
           WHERE t2.shift_id = t.shift_id AND t2.status != 'VOIDED' AND t2.created_at::date = s.open_date::date
-        ), 0)::int AS total_entries
+        ), 0)::int AS total_entries,
+        COALESCE((
+          SELECT SUM(te.calculated_payout)
+          FROM transaction_entries te
+          JOIN transactions t2 ON te.transaction_id = t2.id
+          WHERE t2.shift_id = t.shift_id AND t2.status != 'VOIDED' AND t2.created_at::date = s.open_date::date
+        ), 0)::numeric AS total_payout
       FROM transactions t
       JOIN shifts s ON s.id = t.shift_id
       WHERE t.status != 'VOIDED' AND t.created_at::date = s.open_date::date
       GROUP BY t.shift_id, s.open_date
     `;
 
-    const txMap = new Map<number, { totalAmount: number; totalCount: number; totalEntries: number }>();
+    const txMap = new Map<number, { totalAmount: number; totalCount: number; totalEntries: number; totalPayout: number }>();
     for (const row of txAggregates) {
       txMap.set(row.shift_id, {
         totalAmount: parseFloat(row.total_amount),
         totalCount: row.total_count,
         totalEntries: row.total_entries || row.total_count,
+        totalPayout: parseFloat(row.total_payout),
       });
     }
 
@@ -97,7 +105,7 @@ export class DashboardService {
     const unverifiedShifts: any[] = [];
 
     for (const s of shiftList) {
-      const metrics = txMap.get(s.id) || { totalAmount: 0, totalCount: 0, totalEntries: 0 };
+      const metrics = txMap.get(s.id) || { totalAmount: 0, totalCount: 0, totalEntries: 0, totalPayout: 0 };
 
       const roleConfigs = await db.select()
         .from(shiftRoleConfig)
@@ -137,6 +145,7 @@ export class DashboardService {
         declaredNumber: s.declaredNumber,
         totalAmount: metrics.totalAmount,
         totalCount: metrics.totalEntries || metrics.totalCount,
+        totalPayout: metrics.totalPayout,
         cutoffPassed,
         timeRemainingSeconds: remainingSec,
         isActive: s.isActive ?? true,
