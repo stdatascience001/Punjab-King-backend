@@ -1,4 +1,4 @@
-import { db, shifts, shiftRoleConfig, roles, users, staff, operatorShiftPermissions } from '@pb/database';
+import { db, shifts, shiftRoleConfig, shiftCycles, roles, users, staff, operatorShiftPermissions } from '@pb/database';
 import { eq, and, desc } from 'drizzle-orm';
 import { AppError, CutoffError } from '../../common/errors.js';
 import { ShiftDto, ShiftRoleConfigDto, SystemRole } from '@pb/types';
@@ -170,6 +170,40 @@ export class ShiftService {
         }
       }
       updatePayload.openDate = formattedDate;
+
+      // Manually moving a shift to a different open_date is the same kind of transition the
+      // nightly rollover worker performs automatically — the outgoing date's declared result
+      // must be archived (not silently carried over) and the new date should start fresh,
+      // otherwise the dashboard/shift card would show a stale declaredNumber attached to a
+      // date it never actually belonged to.
+      if (formattedDate !== existing.openDate) {
+        const [existingCycle] = await db.select().from(shiftCycles).where(
+          and(eq(shiftCycles.shiftId, id), eq(shiftCycles.cycleDate, existing.openDate))
+        );
+        if (!existingCycle) {
+          await db.insert(shiftCycles).values({
+            shiftId: id,
+            cycleDate: existing.openDate,
+            status: existing.status,
+            declaredNumber: existing.declaredNumber,
+          });
+        }
+
+        const [newCycle] = await db.select().from(shiftCycles).where(
+          and(eq(shiftCycles.shiftId, id), eq(shiftCycles.cycleDate, formattedDate))
+        );
+        if (!newCycle) {
+          await db.insert(shiftCycles).values({
+            shiftId: id,
+            cycleDate: formattedDate,
+            status: 'OPEN',
+            declaredNumber: null,
+          });
+        }
+
+        updatePayload.status = newCycle ? newCycle.status : 'OPEN';
+        updatePayload.declaredNumber = newCycle ? newCycle.declaredNumber : null;
+      }
     }
     if (data.isNextDay !== undefined) {
       updatePayload.isNextDay = data.isNextDay;
